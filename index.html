@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>IITB Transit — Live Campus Vehicle Prototype</title>
+
+<link rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"
+      integrity="sha512-h9FcoyWjHcOcmEVkxOfTLnmZFWIH0iZhZT1H2TbOq55xssQGEJHEaIm+PgoUaZbRvQTNTluNOEfb1ZRy6D3BOw=="
+      crossorigin="anonymous" referrerpolicy="no-referrer">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="icon" href="favicon.svg">
+
+</head>
+<body>
+
+<div id="map"></div>
+
+<aside class="panel">
+  <div class="panel-head">
+    <div class="brand">
+      <span class="brand-dot"></span>
+      <div>
+        <h1>IITB Transit</h1>
+        <small>Live campus autos &amp; buggies · prototype</small>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel-body">
+    <label class="lbl" for="origin">Pickup</label>
+    <div class="field">
+      <select id="origin"></select>
+      <button class="pick" id="pickO" type="button" aria-pressed="false"
+              title="Pick pickup point on map">◎</button>
+    </div>
+
+    <label class="lbl" for="dest">Drop</label>
+    <div class="field">
+      <select id="dest"></select>
+      <button class="pick" id="pickD" type="button" aria-pressed="false"
+              title="Pick drop point on map">◎</button>
+    </div>
+
+    <label class="lbl">Ride mode</label>
+    <div class="seg" role="group" aria-label="Ride mode">
+      <button id="modeAuto"  type="button" aria-pressed="true">
+        <span class="swatch" style="background:var(--auto)"></span>Auto</button>
+      <button id="modeBuggy" type="button" aria-pressed="false">
+        <span class="swatch" style="background:var(--buggy)"></span>Buggy</button>
+    </div>
+
+    <button class="btn btn-primary" id="findBtn" type="button">Find nearest vehicle</button>
+    <button class="btn btn-ghost"  id="clearBtn" type="button">Clear route</button>
+
+    <div class="summary" id="summary" hidden>
+      <div class="sum-top">
+        <span class="sum-dist" id="sumDist">—</span>
+        <span class="sum-tag" id="sumTag">Optimised</span>
+      </div>
+      <div class="rows">
+        <div class="row"><span class="k"><i class="dot" style="background:var(--ink-3)"></i>Walk</span>
+          <span class="v" id="tWalk">—</span></div>
+        <div class="row"><span class="k"><i class="dot" style="background:var(--auto)"></i>Auto ride</span>
+          <span class="v" id="tAuto">—</span></div>
+        <div class="row"><span class="k"><i class="dot" style="background:var(--buggy)"></i>Buggy ride</span>
+          <span class="v" id="tBuggy">—</span></div>
+        <div class="row"><span class="k"><i class="dot" style="background:var(--route)"></i>Door to door</span>
+          <span class="v" id="tDoor">—</span></div>
+      </div>
+      <div class="alt-note" id="altNote" hidden>
+        <span>Alternative route</span><span id="altDist">—</span>
+      </div>
+      <p class="hint" id="hint"></p>
+    </div>
+
+    <div class="layers">
+      <label class="lbl">Map layers</label>
+      <label class="chk"><input type="checkbox" id="lAutos" checked> Show autos
+        <span class="tally" id="nAutos">0</span></label>
+      <label class="chk"><input type="checkbox" id="lBuggies" checked> Show buggies
+        <span class="tally" id="nBuggies">0</span></label>
+      <label class="chk"><input type="checkbox" id="lHostels" checked> Show hostels
+        <span class="tally" id="nHostels">0</span></label>
+      <label class="chk"><input type="checkbox" id="lAcademic" checked> Show academic zone
+        <span class="tally" id="nAcademic">0</span></label>
+      <label class="chk"><input type="checkbox" id="lRoads"> Show road network</label>
+    </div>
+  </div>
+</aside>
+
+<div class="fleet">
+  <div class="chip"><span class="swatch" style="background:var(--auto)"></span>
+    Autos <b id="cAuto">0</b> live · <b id="cAutoFree">0</b> free</div>
+  <div class="chip"><span class="swatch" style="background:var(--buggy)"></span>
+    Buggies <b id="cBuggy">0</b> live · <b id="cBuggyFree">0</b> free</div>
+</div>
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"
+        integrity="sha512-puJW3E/qXDqYp9IfhAI54BJEaWIfloJ7JWs7OeD5i6ruC9JZL1gERT1wjtwXFlh7CjE7ZJ+/vcRZRkIYIb6p4g=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="js/campus-data.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

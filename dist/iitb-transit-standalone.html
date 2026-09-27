@@ -1,0 +1,1148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>IITB Transit — Live Campus Vehicle Prototype</title>
+
+<link rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"
+      integrity="sha512-h9FcoyWjHcOcmEVkxOfTLnmZFWIH0iZhZT1H2TbOq55xssQGEJHEaIm+PgoUaZbRvQTNTluNOEfb1ZRy6D3BOw=="
+      crossorigin="anonymous" referrerpolicy="no-referrer">
+
+<style>
+/* ============================================================
+   IITB Transit — prototype styles
+   ============================================================ */
+:root{
+  --auto:#f0871f;          /* auto-rickshaw brand colour */
+  --buggy:#12a150;         /* electric buggy brand colour */
+  --route:#1f6feb;         /* primary route */
+  --route-alt:#8b94a3;     /* alternative route */
+  --ink:#0d1117;
+  --ink-2:#424a55;
+  --ink-3:#737c89;
+  --line:#dfe3ea;
+  --glass:rgba(255,255,255,.78);
+  --glass-edge:rgba(255,255,255,.55);
+  --shadow:0 2px 6px rgba(13,17,23,.08), 0 18px 44px -18px rgba(13,17,23,.38);
+  --ok:#12a150; --warn:#d98b00; --bad:#d13b3b;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; font-family:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  font-size:14px; color:var(--ink); background:#e8eaed; overflow:hidden;
+}
+#map{position:absolute; inset:0; z-index:1}
+
+/* ---------- floating panel ---------- */
+.panel{
+  position:absolute; z-index:1000; top:16px; left:16px; width:340px;
+  max-height:calc(100% - 32px); display:flex; flex-direction:column;
+  background:var(--glass); backdrop-filter:blur(16px) saturate(165%);
+  -webkit-backdrop-filter:blur(16px) saturate(165%);
+  border:1px solid var(--glass-edge); border-radius:16px; box-shadow:var(--shadow);
+  overflow:hidden;
+}
+.panel-head{padding:16px 18px 13px; border-bottom:1px solid rgba(13,17,23,.07)}
+.brand{display:flex; align-items:center; gap:9px}
+.brand-dot{width:9px; height:9px; border-radius:50%; background:var(--ok);
+  box-shadow:0 0 0 4px rgba(18,161,80,.18); animation:blip 2.4s ease-in-out infinite}
+@keyframes blip{0%,100%{opacity:1}50%{opacity:.45}}
+.brand h1{margin:0; font-size:15.5px; font-weight:650; letter-spacing:-.01em}
+.brand small{display:block; font-size:11.5px; color:var(--ink-3); font-weight:450; margin-top:1px}
+.panel-body{padding:14px 18px 18px; overflow-y:auto; overscroll-behavior:contain}
+
+.lbl{display:block; font-size:11px; font-weight:600; letter-spacing:.045em;
+  text-transform:uppercase; color:var(--ink-3); margin:0 0 5px}
+.field{display:flex; gap:6px; margin-bottom:11px}
+select{
+  flex:1; min-width:0; padding:9px 10px; font:inherit; font-size:13.5px; color:var(--ink);
+  background:rgba(255,255,255,.92); border:1px solid var(--line); border-radius:9px;
+  appearance:none; cursor:pointer;
+}
+select:focus-visible, button:focus-visible, input:focus-visible{
+  outline:2px solid var(--route); outline-offset:2px}
+.pick{
+  flex:none; width:36px; border:1px solid var(--line); border-radius:9px; cursor:pointer;
+  background:rgba(255,255,255,.92); color:var(--ink-2); font-size:15px; line-height:1;
+}
+.pick[aria-pressed="true"]{background:var(--route); border-color:var(--route); color:#fff}
+
+/* segmented control */
+.seg{display:flex; background:rgba(13,17,23,.06); border-radius:10px; padding:3px; gap:3px; margin-bottom:12px}
+.seg button{
+  flex:1; padding:8px 6px; font:inherit; font-size:13px; font-weight:560; cursor:pointer;
+  background:transparent; border:0; border-radius:8px; color:var(--ink-2);
+  display:flex; align-items:center; justify-content:center; gap:6px;
+}
+.seg button[aria-pressed="true"]{background:#fff; color:var(--ink); box-shadow:0 1px 3px rgba(13,17,23,.14)}
+.seg .swatch{width:8px; height:8px; border-radius:50%}
+
+.btn{
+  width:100%; padding:11px; font:inherit; font-size:13.5px; font-weight:600; cursor:pointer;
+  border-radius:10px; border:1px solid transparent; margin-bottom:8px;
+}
+.btn-primary{background:var(--route); color:#fff}
+.btn-primary:hover{background:#1a5fd0}
+.btn-ghost{background:rgba(255,255,255,.92); border-color:var(--line); color:var(--ink)}
+.btn-ghost:hover{background:#fff}
+
+/* route summary */
+.summary{
+  margin-top:13px; padding:13px; border-radius:12px;
+  background:rgba(255,255,255,.92); border:1px solid var(--line);
+}
+.summary[hidden]{display:none}
+.sum-top{display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:10px}
+.sum-dist{font-size:22px; font-weight:670; letter-spacing:-.02em; font-variant-numeric:tabular-nums}
+.sum-tag{font-size:11px; font-weight:650; padding:3px 8px; border-radius:20px;
+  background:rgba(31,111,235,.12); color:var(--route)}
+.rows{display:grid; gap:7px}
+.row{display:flex; justify-content:space-between; align-items:center; font-size:13px}
+.row .k{color:var(--ink-2); display:flex; align-items:center; gap:7px}
+.row .v{font-weight:620; font-variant-numeric:tabular-nums}
+.row .dot{width:8px; height:8px; border-radius:50%; flex:none}
+.hint{margin:10px 0 0; font-size:11.5px; line-height:1.5; color:var(--ink-3)}
+.alt-note{margin-top:9px; padding-top:9px; border-top:1px dashed var(--line);
+  font-size:12px; color:var(--ink-2); display:flex; justify-content:space-between}
+
+/* layers */
+.layers{margin-top:14px; padding-top:13px; border-top:1px solid rgba(13,17,23,.08)}
+.chk{display:flex; align-items:center; gap:9px; padding:5px 0; font-size:13px; cursor:pointer}
+.chk input{width:15px; height:15px; accent-color:var(--route); cursor:pointer}
+.chk .tally{margin-left:auto; font-size:11.5px; color:var(--ink-3); font-variant-numeric:tabular-nums}
+
+/* fleet strip */
+.fleet{position:absolute; z-index:1000; left:16px; bottom:16px; display:flex; gap:8px; flex-wrap:wrap}
+.chip{
+  display:flex; align-items:center; gap:8px; padding:8px 13px; border-radius:11px;
+  background:var(--glass); backdrop-filter:blur(14px) saturate(160%);
+  -webkit-backdrop-filter:blur(14px) saturate(160%);
+  border:1px solid var(--glass-edge); box-shadow:var(--shadow); font-size:12.5px;
+}
+.chip b{font-variant-numeric:tabular-nums; font-weight:670}
+.chip .swatch{width:9px; height:9px; border-radius:50%}
+
+/* ---------- map markers ---------- */
+.veh{position:relative; width:34px; height:34px}
+.veh .body{
+  position:absolute; inset:0; border-radius:50%; display:grid; place-items:center;
+  border:2.5px solid #fff; box-shadow:0 2px 7px rgba(13,17,23,.35);
+  transition:transform .18s ease;
+}
+.veh.auto .body{background:var(--auto)}
+.veh.buggy .body{background:var(--buggy)}
+.veh .heading{
+  position:absolute; left:50%; top:50%; width:0; height:0; margin:-25px 0 0 -5px;
+  border-left:5px solid transparent; border-right:5px solid transparent;
+  border-bottom:8px solid rgba(13,17,23,.55); transform-origin:5px 25px;
+}
+.veh.sel .body{transform:scale(1.18)}
+.veh.sel::after{
+  content:""; position:absolute; left:50%; top:50%; width:34px; height:34px;
+  margin:-17px 0 0 -17px; border-radius:50%; border:2px solid var(--route);
+  animation:pulse 1.5s ease-out infinite;
+}
+@keyframes pulse{0%{transform:scale(1);opacity:.9}100%{transform:scale(2.6);opacity:0}}
+
+.pin{width:26px; height:26px; border-radius:50%; display:grid; place-items:center;
+  font-size:10px; font-weight:700; color:#fff; border:2px solid #fff;
+  box-shadow:0 1px 5px rgba(13,17,23,.3)}
+.pin.gate{background:#6f42c1}
+.pin.academic{background:#1f6feb}
+.pin.hostel{background:#5a6472}
+.pin.facility{background:#0f8b8d}
+.pin.star{background:#d13b3b; width:30px; height:30px; font-size:11px;
+  box-shadow:0 0 0 4px rgba(209,59,59,.22), 0 1px 5px rgba(13,17,23,.3)}
+.endpin{width:18px; height:18px; border-radius:50%; border:3px solid #fff;
+  box-shadow:0 1px 5px rgba(13,17,23,.4)}
+.endpin.o{background:var(--ok)} .endpin.d{background:var(--bad)}
+
+/* animated route dash */
+.route-anim{stroke-dasharray:14 9; animation:flow 1.1s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-23}}
+
+.leaflet-popup-content{margin:12px 14px; font-family:inherit; min-width:190px}
+.leaflet-popup-content-wrapper{border-radius:12px}
+.pop-h{display:flex; align-items:center; gap:8px; margin-bottom:9px}
+.pop-h .swatch{width:10px; height:10px; border-radius:50%; flex:none}
+.pop-h b{font-size:14px}
+.pop-type{font-size:11px; color:var(--ink-3); display:block; margin-top:1px}
+.pop-row{display:flex; justify-content:space-between; font-size:12.5px; padding:3px 0}
+.pop-row span:first-child{color:var(--ink-2)}
+.pop-row span:last-child{font-weight:620; font-variant-numeric:tabular-nums}
+.badge{display:inline-block; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:650}
+.badge.available{background:rgba(18,161,80,.14); color:var(--ok)}
+.badge.enroute{background:rgba(217,139,0,.16); color:var(--warn)}
+.badge.full{background:rgba(209,59,59,.13); color:var(--bad)}
+.bar{height:5px; border-radius:3px; background:rgba(13,17,23,.1); overflow:hidden; margin-top:4px}
+.bar i{display:block; height:100%; border-radius:3px}
+
+/* On a phone the panel becomes a bottom sheet: the map keeps the top half of
+   the screen, and the controls sit under the thumb. */
+@media (max-width:760px){
+  .panel{left:8px; right:8px; width:auto; top:auto; bottom:8px; max-height:52%;
+         border-radius:18px}
+  .panel-head{padding:12px 16px 10px}
+  .panel-body{padding:12px 16px 14px}
+  .fleet{left:8px; right:8px; top:8px; bottom:auto; gap:6px}
+  .chip{padding:6px 10px; font-size:11.5px}
+  .leaflet-bottom.leaflet-right{bottom:calc(52% + 2px)}
+}
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<aside class="panel">
+  <div class="panel-head">
+    <div class="brand">
+      <span class="brand-dot"></span>
+      <div>
+        <h1>IITB Transit</h1>
+        <small>Live campus autos &amp; buggies · prototype</small>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel-body">
+    <label class="lbl" for="origin">Pickup</label>
+    <div class="field">
+      <select id="origin"></select>
+      <button class="pick" id="pickO" type="button" aria-pressed="false"
+              title="Pick pickup point on map">◎</button>
+    </div>
+
+    <label class="lbl" for="dest">Drop</label>
+    <div class="field">
+      <select id="dest"></select>
+      <button class="pick" id="pickD" type="button" aria-pressed="false"
+              title="Pick drop point on map">◎</button>
+    </div>
+
+    <label class="lbl">Ride mode</label>
+    <div class="seg" role="group" aria-label="Ride mode">
+      <button id="modeAuto"  type="button" aria-pressed="true">
+        <span class="swatch" style="background:var(--auto)"></span>Auto</button>
+      <button id="modeBuggy" type="button" aria-pressed="false">
+        <span class="swatch" style="background:var(--buggy)"></span>Buggy</button>
+    </div>
+
+    <button class="btn btn-primary" id="findBtn" type="button">Find nearest vehicle</button>
+    <button class="btn btn-ghost"  id="clearBtn" type="button">Clear route</button>
+
+    <div class="summary" id="summary" hidden>
+      <div class="sum-top">
+        <span class="sum-dist" id="sumDist">—</span>
+        <span class="sum-tag" id="sumTag">Optimised</span>
+      </div>
+      <div class="rows">
+        <div class="row"><span class="k"><i class="dot" style="background:var(--ink-3)"></i>Walk</span>
+          <span class="v" id="tWalk">—</span></div>
+        <div class="row"><span class="k"><i class="dot" style="background:var(--auto)"></i>Auto ride</span>
+          <span class="v" id="tAuto">—</span></div>
+        <div class="row"><span class="k"><i class="dot" style="background:var(--buggy)"></i>Buggy ride</span>
+          <span class="v" id="tBuggy">—</span></div>
+        <div class="row"><span class="k"><i class="dot" style="background:var(--route)"></i>Door to door</span>
+          <span class="v" id="tDoor">—</span></div>
+      </div>
+      <div class="alt-note" id="altNote" hidden>
+        <span>Alternative route</span><span id="altDist">—</span>
+      </div>
+      <p class="hint" id="hint"></p>
+    </div>
+
+    <div class="layers">
+      <label class="lbl">Map layers</label>
+      <label class="chk"><input type="checkbox" id="lAutos" checked> Show autos
+        <span class="tally" id="nAutos">0</span></label>
+      <label class="chk"><input type="checkbox" id="lBuggies" checked> Show buggies
+        <span class="tally" id="nBuggies">0</span></label>
+      <label class="chk"><input type="checkbox" id="lHostels" checked> Show hostels
+        <span class="tally" id="nHostels">0</span></label>
+      <label class="chk"><input type="checkbox" id="lAcademic" checked> Show academic zone
+        <span class="tally" id="nAcademic">0</span></label>
+      <label class="chk"><input type="checkbox" id="lRoads"> Show road network</label>
+    </div>
+  </div>
+</aside>
+
+<div class="fleet">
+  <div class="chip"><span class="swatch" style="background:var(--auto)"></span>
+    Autos <b id="cAuto">0</b> live · <b id="cAutoFree">0</b> free</div>
+  <div class="chip"><span class="swatch" style="background:var(--buggy)"></span>
+    Buggies <b id="cBuggy">0</b> live · <b id="cBuggyFree">0</b> free</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"
+        integrity="sha512-puJW3E/qXDqYp9IfhAI54BJEaWIfloJ7JWs7OeD5i6ruC9JZL1gERT1wjtwXFlh7CjE7ZJ+/vcRZRkIYIb6p4g=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>
+"use strict";
+/* ===========================================================================
+   IITB TRANSIT — live campus vehicle tracking prototype
+   ---------------------------------------------------------------------------
+   Sections:
+     1. Campus data (landmarks + road network)   <-- edit coordinates here
+     2. Geometry helpers
+     3. Road graph + Dijkstra routing
+     4. Map setup and landmark layers
+     5. Vehicle fleet simulation
+     6. Route planning UI
+     7. Nearest-vehicle search
+     8. Layer toggles + boot
+   =========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   1. CAMPUS DATA
+   ---------------------------------------------------------------------------
+   Landmark coordinates and the road network are taken from OpenStreetMap data
+   for the IIT Bombay campus (ODbL, (c) OpenStreetMap contributors), simplified
+   to about five metres of accuracy. They are good enough to route on and to
+   read distances from, but they are not a survey. Hostels 17 and 18 are not
+   mapped individually in OSM, so those two pins sit at the middle of the block
+   they belong to. Everything below is data only - swap in your own numbers and
+   nothing else has to change.
+--------------------------------------------------------------------------- */
+const CAMPUS_CENTER = [19.1334, 72.9133];
+const CAMPUS_ZOOM   = 15;
+
+const LANDMARKS = [
+  // --- gates ---
+  { id:'main-gate', name:'Main Gate',        cat:'gate', lat:19.12562, lng:72.91612 },
+  { id:'y-point',   name:'Y-Point Gate',     cat:'gate', lat:19.12915, lng:72.91896 },
+  { id:'lakeside',  name:'Lakeside Gate',    cat:'gate', lat:19.12489, lng:72.91148 },
+
+  // --- academic / institutional ---
+  { id:'main-bldg', name:'Main Building',    cat:'academic', lat:19.13249, lng:72.91559 },
+  { id:'convo',     name:'Convocation Hall', cat:'academic', lat:19.13194, lng:72.91437 },
+  { id:'library',   name:'Central Library',  cat:'academic', lat:19.13407, lng:72.91511 },
+  { id:'lhc',       name:'Lecture Hall Complex (LHC)', cat:'academic', lat:19.13074, lng:72.91672 },
+  { id:'kresit',    name:'KReSIT',           cat:'academic', lat:19.13044, lng:72.91589 },
+
+  // --- facilities ---
+  { id:'gymkhana',  name:'Gymkhana',         cat:'facility', lat:19.13461, lng:72.91244 },
+  { id:'sac',       name:'SAC',              cat:'facility', lat:19.13490, lng:72.91360 },
+
+  // --- hostels (H16 is flagged as the highlighted hostel) ---
+  { id:'h1',  name:'Hostel 1',  cat:'hostel', lat:19.13667, lng:72.91394 },
+  { id:'h2',  name:'Hostel 2',  cat:'hostel', lat:19.13645, lng:72.91257 },
+  { id:'h3',  name:'Hostel 3',  cat:'hostel', lat:19.13623, lng:72.91149 },
+  { id:'h4',  name:'Hostel 4',  cat:'hostel', lat:19.13649, lng:72.91011 },
+  { id:'h5',  name:'Hostel 5',  cat:'hostel', lat:19.13502, lng:72.90970 },
+  { id:'h6',  name:'Hostel 6',  cat:'hostel', lat:19.13586, lng:72.90698 },
+  { id:'h7',  name:'Hostel 7',  cat:'hostel', lat:19.13343, lng:72.91088 },
+  { id:'h8',  name:'Hostel 8',  cat:'hostel', lat:19.13370, lng:72.91123 },
+  { id:'h9',  name:'Hostel 9',  cat:'hostel', lat:19.13561, lng:72.90824 },
+  { id:'h10', name:'Hostel 10', cat:'hostel', lat:19.12906, lng:72.91578 },
+  { id:'h11', name:'Hostel 11', cat:'hostel', lat:19.13293, lng:72.91181 },
+  { id:'h12', name:'Hostel 12', cat:'hostel', lat:19.13554, lng:72.90461 },
+  { id:'h13', name:'Hostel 13', cat:'hostel', lat:19.13460, lng:72.90480 },
+  { id:'h14', name:'Hostel 14', cat:'hostel', lat:19.13469, lng:72.90606 },
+  { id:'h15', name:'Hostel 15', cat:'hostel', lat:19.13760, lng:72.91400 },
+  { id:'h16', name:'Hostel 16', cat:'hostel', lat:19.13775, lng:72.91315, star:true },
+  { id:'h17', name:'Hostel 17', cat:'hostel', lat:19.13640, lng:72.90880 },
+  { id:'h18', name:'Hostel 18', cat:'hostel', lat:19.13672, lng:72.90935 }
+];
+
+const BY_ID = Object.fromEntries(LANDMARKS.map(l => [l.id, l]));
+/** Coordinate pair for a landmark id. */
+const P = id => [BY_ID[id].lat, BY_ID[id].lng];
+
+/* Road network, from OpenStreetMap. Each road is an ordered list of points;
+   consecutive points become bidirectional graph edges, and roads that share a
+   point join there, which is what turns this list into a routable graph. */
+const ROADS = [
+  { name:"Padmavati Devi Marg", pts:[[19.12555,72.91941],[19.12764,72.91918]] },
+  { name:"Mukteswar Ashram Road", pts:[[19.12541,72.91886],[19.12709,72.91873]] },
+  { name:"Main Gate Road", pts:[[19.12505,72.91652],[19.12522,72.91646]] },
+  { name:"Swimming pool road", pts:[[19.13300,72.91366],[19.13430,72.91418],[19.13528,72.91456],[19.13601,72.91472],[19.13714,72.91500],[19.13724,72.91503],[19.13768,72.91518],[19.13819,72.91552],[19.13831,72.91563],[19.13838,72.91587],[19.13821,72.91641],[19.13804,72.91670],[19.13763,72.91724],[19.13745,72.91747],[19.13723,72.91772],[19.13705,72.91786],[19.13700,72.91791],[19.13674,72.91802],[19.13664,72.91804],[19.13630,72.91805],[19.13504,72.91808]] },
+  { name:"Campus School Road", pts:[[19.12960,72.91711],[19.12844,72.91776],[19.12841,72.91777]] },
+  { name:"Campus road", pts:[[19.12619,72.91538],[19.12641,72.91596]] },
+  { name:"Campus road", pts:[[19.12888,72.91908],[19.12969,72.91903],[19.12977,72.91902],[19.13048,72.91897],[19.13065,72.91895],[19.13111,72.91892],[19.13172,72.91887],[19.13202,72.91885]] },
+  { name:"Laboratory Street", pts:[[19.13430,72.91418],[19.13435,72.91473],[19.13443,72.91544],[19.13443,72.91547],[19.13442,72.91681],[19.13440,72.91842],[19.13439,72.91921]] },
+  { name:"Campus road", pts:[[19.13280,72.91544],[19.13292,72.91709],[19.13301,72.91718]] },
+  { name:"Campus road", pts:[[19.13630,72.91805],[19.13623,72.91698],[19.13621,72.91593],[19.13608,72.91570],[19.13595,72.91542],[19.13555,72.91519],[19.13529,72.91491],[19.13528,72.91456]] },
+  { name:"s1", pts:[[19.13612,72.91069],[19.13686,72.91074],[19.13740,72.91078],[19.13747,72.91078],[19.13759,72.91106]] },
+  { name:"Campus road", pts:[[19.13686,72.91074],[19.13687,72.91062]] },
+  { name:"Campus road", pts:[[19.13595,72.91542],[19.13443,72.91544]] },
+  { name:"Hillside Road", pts:[[19.13305,72.91798],[19.13314,72.91822],[19.13342,72.91843],[19.13440,72.91842]] },
+  { name:"Campus road", pts:[[19.13299,72.91708],[19.13287,72.91543],[19.13280,72.91544]] },
+  { name:"Campus road", pts:[[19.12480,72.91648],[19.12453,72.91684],[19.12447,72.91716],[19.12443,72.91752],[19.12452,72.91803],[19.12481,72.91852],[19.12541,72.91886]] },
+  { name:"Campus road", pts:[[19.12481,72.91852],[19.12447,72.91903],[19.12416,72.91951],[19.12393,72.91915],[19.12382,72.91896],[19.12376,72.91887],[19.12372,72.91880],[19.12364,72.91867],[19.12361,72.91852],[19.12351,72.91805],[19.12345,72.91758],[19.12348,72.91690],[19.12351,72.91674],[19.12357,72.91650],[19.12364,72.91633],[19.12370,72.91615],[19.12362,72.91547]] },
+  { name:"Campus road", pts:[[19.12453,72.91684],[19.12408,72.91666],[19.12357,72.91650]] },
+  { name:"Campus road", pts:[[19.13768,72.91518],[19.13775,72.91498],[19.13776,72.91496],[19.13783,72.91492],[19.13859,72.91470]] },
+  { name:"Campus road", pts:[[19.13207,72.91944],[19.13290,72.91934],[19.13339,72.91929],[19.13439,72.91921]] },
+  { name:"Hillside Road", pts:[[19.13504,72.91808],[19.13474,72.91809],[19.13440,72.91842]] },
+  { name:"Campus road", pts:[[19.12506,72.91583],[19.12611,72.91542],[19.12619,72.91538],[19.12743,72.91491],[19.12784,72.91475],[19.12845,72.91467]] },
+  { name:"Campus road", pts:[[19.12693,72.91698],[19.12774,72.91662],[19.12830,72.91641]] },
+  { name:"Lakeside Road", pts:[[19.12843,72.91541],[19.12845,72.91467],[19.12869,72.91431],[19.12872,72.91373]] },
+  { name:"Campus road", pts:[[19.12483,72.90922],[19.12603,72.90903]] },
+  { name:"Campus road", pts:[[19.12479,72.91137],[19.12471,72.91083],[19.12464,72.90994],[19.12456,72.90969],[19.12440,72.90950],[19.12428,72.90901],[19.12433,72.90891],[19.12466,72.90883],[19.12473,72.90886],[19.12477,72.90889],[19.12483,72.90922]] },
+  { name:"Campus road", pts:[[19.12532,72.91338],[19.12537,72.91443],[19.12537,72.91463],[19.12529,72.91501],[19.12540,72.91514],[19.12611,72.91542]] },
+  { name:"Campus road", pts:[[19.12443,72.91752],[19.12388,72.91755],[19.12345,72.91758],[19.12267,72.91778],[19.12257,72.91778],[19.12065,72.91686]] },
+  { name:"Campus road", pts:[[19.12515,72.91781],[19.12607,72.91776]] },
+  { name:"Campus road", pts:[[19.12376,72.91006],[19.12372,72.90927],[19.12354,72.90897],[19.12330,72.90877],[19.12310,72.90868],[19.12299,72.90863],[19.12192,72.90840],[19.12159,72.90832],[19.12110,72.90807],[19.12086,72.90784],[19.12063,72.90726]] },
+  { name:"Campus road", pts:[[19.12431,72.91466],[19.12406,72.91369],[19.12389,72.91315],[19.12377,72.91270],[19.12375,72.91264],[19.12356,72.91197],[19.12355,72.91133],[19.12327,72.91016]] },
+  { name:"Padmavati Devi Marg", pts:[[19.12555,72.91941],[19.12518,72.91936],[19.12447,72.91903],[19.12417,72.91858],[19.12400,72.91805],[19.12388,72.91755],[19.12408,72.91666],[19.12425,72.91627],[19.12470,72.91612]] },
+  { name:"Campus road", pts:[[19.13804,72.91670],[19.13775,72.91631],[19.13727,72.91620],[19.13734,72.91577],[19.13784,72.91587],[19.13775,72.91631]] },
+  { name:"East Avenue", pts:[[19.12406,72.91369],[19.12328,72.91395],[19.12149,72.91434],[19.12122,72.91440],[19.11998,72.91509]] },
+  { name:"Campus road", pts:[[19.12129,72.91593],[19.12246,72.91587],[19.12327,72.91553],[19.12362,72.91547],[19.12390,72.91545],[19.12401,72.91557],[19.12425,72.91627]] },
+  { name:"Campus road", pts:[[19.12310,72.90868],[19.12311,72.90921],[19.12311,72.90930],[19.12316,72.90970],[19.12327,72.91016]] },
+  { name:"Campus road", pts:[[19.12364,72.91633],[19.12308,72.91621],[19.12219,72.91641],[19.12127,72.91634]] },
+  { name:"Campus road", pts:[[19.13342,72.91843],[19.13332,72.91886]] },
+  { name:"Hare Krishna Road", pts:[[19.12497,72.91675],[19.12490,72.91684],[19.12515,72.91781],[19.12529,72.91837],[19.12541,72.91886],[19.12555,72.91941]] },
+  { name:"Main Gate Road", pts:[[19.12600,72.91616],[19.12641,72.91596],[19.12724,72.91557],[19.12783,72.91541],[19.12826,72.91541],[19.12843,72.91541],[19.12955,72.91541],[19.13029,72.91539],[19.13168,72.91525],[19.13191,72.91523],[19.13231,72.91506],[19.13247,72.91488],[19.13263,72.91470],[19.13300,72.91366],[19.13337,72.91262],[19.13357,72.91214],[19.13420,72.91047],[19.13432,72.91016],[19.13470,72.90900],[19.13477,72.90879],[19.13490,72.90840],[19.13491,72.90835],[19.13498,72.90814]] },
+  { name:"Campus road", pts:[[19.13530,72.90987],[19.13515,72.91041]] },
+  { name:"Campus road", pts:[[19.13612,72.91052],[19.13612,72.91069]] },
+  { name:"Campus road", pts:[[19.13490,72.90840],[19.13549,72.90857],[19.13557,72.90831],[19.13506,72.90815]] },
+  { name:"Campus road", pts:[[19.13563,72.90723],[19.13570,72.90730],[19.13571,72.90721],[19.13563,72.90723],[19.13525,72.90710]] },
+  { name:"Campus road", pts:[[19.13763,72.91724],[19.13727,72.91696],[19.13682,72.91695],[19.13623,72.91698]] },
+  { name:"Campus road", pts:[[19.13595,72.91542],[19.13708,72.91566]] },
+  { name:"Campus road", pts:[[19.13667,72.91848],[19.13659,72.91880],[19.13641,72.91884],[19.13590,72.91875]] },
+  { name:"Campus road", pts:[[19.13667,72.91848],[19.13714,72.91863],[19.13761,72.91873],[19.13884,72.91889],[19.13896,72.91883],[19.13945,72.91792],[19.13978,72.91779],[19.13991,72.91699],[19.14042,72.91678],[19.14115,72.91668],[19.14120,72.91660],[19.14121,72.91640],[19.14062,72.91606],[19.14064,72.91569],[19.14076,72.91543],[19.14059,72.91531]] },
+  { name:"Campus road", pts:[[19.12431,72.91466],[19.12320,72.91479],[19.12310,72.91483],[19.12234,72.91512],[19.12161,72.91512],[19.12150,72.91498],[19.12150,72.91458],[19.12149,72.91434]] },
+  { name:"Campus road", pts:[[19.12267,72.91778],[19.12266,72.91806],[19.12302,72.91841],[19.12361,72.91852]] },
+  { name:"Campus road", pts:[[19.12311,72.90921],[19.12270,72.90930],[19.12191,72.90908],[19.12186,72.90881],[19.12192,72.90840]] },
+  { name:"Campus road", pts:[[19.13518,72.91703],[19.13508,72.91686],[19.13496,72.91680],[19.13442,72.91681]] },
+  { name:"Campus road", pts:[[19.12393,72.91915],[19.12380,72.91937],[19.12290,72.91953],[19.12280,72.91912]] },
+  { name:"Campus road", pts:[[19.13593,72.91341],[19.13519,72.91315]] },
+  { name:"Campus road", pts:[[19.13557,72.90557],[19.13562,72.90559],[19.13571,72.90568],[19.13576,72.90586],[19.13566,72.90591],[19.13554,72.90577]] },
+  { name:"Campus road", pts:[[19.13676,72.90596],[19.13785,72.90536],[19.13790,72.90533],[19.13826,72.90501],[19.13851,72.90493],[19.13876,72.90449],[19.13876,72.90433],[19.13792,72.90335]] },
+  { name:"Hostel Road", pts:[[19.13601,72.91472],[19.13593,72.91341],[19.13597,72.91252],[19.13603,72.91143],[19.13612,72.91069]] },
+  { name:"Campus road", pts:[[19.13636,72.91255],[19.13597,72.91252],[19.13589,72.91252]] },
+  { name:"Campus road", pts:[[19.12955,72.91541],[19.12958,72.91632],[19.12960,72.91687],[19.12960,72.91711],[19.12961,72.91728]] },
+  { name:"Boathouse Path", pts:[[19.13141,72.91214],[19.13114,72.91180],[19.13093,72.91135],[19.13050,72.91070],[19.13005,72.91031],[19.12989,72.91032]] },
+  { name:"Lakeside Road", pts:[[19.13420,72.91047],[19.13336,72.91045],[19.13312,72.91061],[19.13268,72.91110],[19.13180,72.91220],[19.13141,72.91214],[19.13128,72.91222],[19.13147,72.91319],[19.13140,72.91344],[19.13125,72.91356],[19.13091,72.91360],[19.13043,72.91367],[19.13028,72.91384],[19.12969,72.91399],[19.12947,72.91378],[19.12872,72.91373]] },
+  { name:"Campus road", pts:[[19.12844,72.91922],[19.12841,72.91900]] },
+  { name:"Campus road", pts:[[19.12841,72.91777],[19.12852,72.91825],[19.12840,72.91861]] },
+  { name:"Campus road", pts:[[19.12609,72.91677],[19.12824,72.91582]] },
+  { name:"Campus road", pts:[[19.12840,72.91861],[19.12807,72.91848],[19.12782,72.91849],[19.12748,72.91830],[19.12736,72.91798],[19.12696,72.91762],[19.12691,72.91743],[19.12699,72.91726],[19.12693,72.91698],[19.12634,72.91712],[19.12609,72.91677],[19.12582,72.91634],[19.12578,72.91623]] },
+  { name:"Main Gate Road", pts:[[19.12600,72.91616],[19.12582,72.91634],[19.12517,72.91666]] },
+  { name:"Campus road", pts:[[19.13545,72.90614],[19.13580,72.90622],[19.13618,72.90615]] },
+  { name:"Campus road", pts:[[19.13790,72.90533],[19.13806,72.90562],[19.13848,72.90587],[19.13880,72.90597]] },
+  { name:"Campus road", pts:[[19.12527,72.91319],[19.12449,72.91323]] },
+  { name:"Campus road", pts:[[19.12734,72.91403],[19.12741,72.91411],[19.12738,72.91471],[19.12743,72.91491]] },
+  { name:"Jain Temple Road", pts:[[19.12662,72.91827],[19.12529,72.91837]] },
+  { name:"Campus road", pts:[[19.13029,72.91539],[19.13028,72.91492]] },
+  { name:"Campus road", pts:[[19.12869,72.91431],[19.12946,72.91437],[19.12951,72.91448],[19.12947,72.91481],[19.12955,72.91494],[19.12958,72.91496],[19.13028,72.91492],[19.13044,72.91491],[19.13147,72.91482],[19.13157,72.91493],[19.13168,72.91525]] },
+  { name:"Campus road", pts:[[19.13470,72.90900],[19.13579,72.90937]] },
+  { name:"Campus road", pts:[[19.13819,72.91552],[19.13853,72.91522],[19.13871,72.91518],[19.13996,72.91538]] },
+  { name:"Campus road", pts:[[19.13837,72.91328],[19.13847,72.91310],[19.13811,72.91248],[19.13782,72.91247],[19.13769,72.91260],[19.13755,72.91275],[19.13754,72.91285],[19.13751,72.91312],[19.13749,72.91322],[19.13731,72.91339],[19.13737,72.91379],[19.13740,72.91392],[19.13745,72.91429],[19.13719,72.91460],[19.13714,72.91500]] },
+  { name:"Campus road", pts:[[19.13044,72.91491],[19.13041,72.91425],[19.13048,72.91417],[19.13092,72.91411]] },
+  { name:"Campus road", pts:[[19.13199,72.91833],[19.13084,72.91839]] },
+  { name:"Campus road", pts:[[19.13337,72.91262],[19.13309,72.91250],[19.13265,72.91227]] },
+  { name:"Campus road", pts:[[19.13664,72.91804],[19.13667,72.91848]] },
+  { name:"Campus road", pts:[[19.13859,72.91470],[19.13912,72.91454]] },
+  { name:"Lakeside Road", pts:[[19.12872,72.91373],[19.12784,72.91414],[19.12734,72.91403],[19.12572,72.91375],[19.12532,72.91338],[19.12527,72.91319],[19.12512,72.91260],[19.12507,72.91183],[19.12479,72.91137],[19.12410,72.91137],[19.12383,72.91136]] },
+  { name:"Campus road", pts:[[19.13092,72.91411],[19.13091,72.91360]] },
+  { name:"Campus road", pts:[[19.13202,72.91885],[19.13207,72.91944]] },
+  { name:"s1", pts:[[19.13432,72.91016],[19.13515,72.91041],[19.13573,72.91058],[19.13612,72.91069]] },
+  { name:"Main Building Entrance Road", pts:[[19.13247,72.91488],[19.13269,72.91505],[19.13314,72.91518]] },
+  { name:"Central Library Parking lot", pts:[[19.13367,72.91544],[19.13443,72.91544]] },
+  { name:"Central Library Parking Lot", pts:[[19.13443,72.91547],[19.13368,72.91550],[19.13367,72.91544]] },
+  { name:"Campus road", pts:[[19.12150,72.91458],[19.12306,72.91427],[19.12310,72.91483]] },
+  { name:"Campus road", pts:[[19.13469,72.90489],[19.13479,72.90486],[19.13495,72.90495],[19.13508,72.90549],[19.13509,72.90550]] },
+  { name:"Campus road", pts:[[19.13439,72.91921],[19.13467,72.91908],[19.13486,72.91883],[19.13503,72.91844],[19.13504,72.91808]] },
+  { name:"Campus road", pts:[[19.13579,72.90937],[19.13593,72.90929],[19.13612,72.90892],[19.13626,72.90895],[19.13703,72.90908]] },
+  { name:"Campus road", pts:[[19.12483,72.90922],[19.12488,72.90963],[19.12464,72.90994]] },
+  { name:"Campus road", pts:[[19.12955,72.91541],[19.12955,72.91494]] },
+  { name:"Campus road", pts:[[19.13518,72.90503],[19.13509,72.90550]] },
+  { name:"Campus road", pts:[[19.13509,72.90550],[19.13553,72.90567]] },
+  { name:"Campus road", pts:[[19.13508,72.90549],[19.13488,72.90563],[19.13512,72.90573],[19.13526,72.90602],[19.13545,72.90614]] },
+  { name:"Campus road", pts:[[19.13704,72.91886],[19.13576,72.91912],[19.13467,72.91908]] },
+  { name:"Campus road", pts:[[19.12832,72.91936],[19.12844,72.91922]] },
+  { name:"Campus road", pts:[[19.12862,72.91910],[19.12844,72.91922]] },
+  { name:"Campus road", pts:[[19.12487,72.91662],[19.12494,72.91659]] },
+  { name:"Campus road", pts:[[19.12517,72.91666],[19.12497,72.91675]] },
+  { name:"Main Gate Road", pts:[[19.12494,72.91659],[19.12505,72.91652]] },
+  { name:"Main Gate Road", pts:[[19.12522,72.91646],[19.12578,72.91623],[19.12600,72.91616]] },
+  { name:"Orchard Avenue", pts:[[19.12125,72.91007],[19.12217,72.91020],[19.12327,72.91016],[19.12376,72.91006],[19.12385,72.91006]] },
+  { name:"Campus road", pts:[[19.12436,72.91483],[19.12419,72.91485],[19.12282,72.91506]] },
+  { name:"Campus road", pts:[[19.12583,72.91744],[19.12565,72.91738],[19.12501,72.91682],[19.12497,72.91675],[19.12487,72.91662],[19.12480,72.91648],[19.12470,72.91612],[19.12436,72.91483],[19.12431,72.91466]] },
+  { name:"Campus road", pts:[[19.13400,72.90536],[19.13347,72.90497],[19.13373,72.90451],[19.13421,72.90433],[19.13477,72.90461],[19.13542,72.90396],[19.13571,72.90414],[19.13586,72.90434],[19.13601,72.90495],[19.13614,72.90545],[19.13562,72.90559]] },
+  { name:"Campus road", pts:[[19.13618,72.90615],[19.13676,72.90596]] },
+  { name:"Campus road", pts:[[19.12348,72.91690],[19.12282,72.91677],[19.12243,72.91678]] },
+  { name:"Campus road", pts:[[19.12925,72.91656],[19.12931,72.91662],[19.12929,72.91703],[19.12897,72.91704],[19.12892,72.91664],[19.12906,72.91656]] },
+  { name:"Campus road", pts:[[19.12925,72.91656],[19.12906,72.91656]] },
+  { name:"Campus road", pts:[[19.12960,72.91687],[19.12966,72.91686],[19.12999,72.91622]] },
+  { name:"Campus road", pts:[[19.12966,72.91686],[19.12982,72.91694],[19.12995,72.91714],[19.13001,72.91726],[19.13000,72.91760],[19.12967,72.91796]] },
+  { name:"Campus road", pts:[[19.12888,72.91908],[19.12891,72.91957]] },
+  { name:"Campus road", pts:[[19.12972,72.91927],[19.12969,72.91903]] },
+  { name:"Campus road", pts:[[19.13339,72.91929],[19.13332,72.91886],[19.13288,72.91889],[19.13290,72.91934]] },
+  { name:"Campus road", pts:[[19.13309,72.91250],[19.13292,72.91282]] },
+  { name:"Campus road", pts:[[19.12376,72.91887],[19.12280,72.91912],[19.12273,72.91914]] },
+  { name:"Campus road", pts:[[19.13601,72.90495],[19.13542,72.90521]] },
+  { name:"Main Gate Road", pts:[[19.13498,72.90814],[19.13512,72.90758],[19.13525,72.90710],[19.13545,72.90614],[19.13554,72.90577],[19.13553,72.90567],[19.13557,72.90557]] },
+  { name:"Campus road", pts:[[19.13579,72.90937],[19.13698,72.90970]] },
+  { name:"Campus road", pts:[[19.13322,72.91201],[19.13357,72.91214]] },
+  { name:"Campus road", pts:[[19.13477,72.90879],[19.13464,72.90876],[19.13365,72.90850],[19.13377,72.90801],[19.13474,72.90830],[19.13491,72.90835]] },
+  { name:"Campus road", pts:[[19.13474,72.90830],[19.13464,72.90876]] },
+  { name:"Campus road", pts:[[19.13624,72.91145],[19.13619,72.91187]] },
+  { name:"Campus road", pts:[[19.13754,72.91285],[19.13771,72.91288],[19.13781,72.91275],[19.13769,72.91260]] },
+  { name:"Campus road", pts:[[19.13302,72.91749],[19.13315,72.91743],[19.13320,72.91725],[19.13317,72.91716],[19.13301,72.91715]] },
+  { name:"Campus road", pts:[[19.13705,72.91786],[19.13716,72.91826],[19.13714,72.91863]] },
+  { name:"Campus road", pts:[[19.12473,72.90886],[19.12492,72.90871],[19.12593,72.90872],[19.12612,72.90880]] },
+  { name:"Campus road", pts:[[19.12826,72.91541],[19.12824,72.91582],[19.12830,72.91641]] },
+  { name:"Campus road", pts:[[19.12830,72.91641],[19.12906,72.91636],[19.12924,72.91634],[19.12958,72.91632]] },
+  { name:"Campus road", pts:[[19.13629,72.91145],[19.13624,72.91145],[19.13603,72.91143]] },
+  { name:"Campus road", pts:[[19.13066,72.91852],[19.13063,72.91853],[19.12974,72.91860]] },
+  { name:"Campus road", pts:[[19.13065,72.91895],[19.13063,72.91853]] },
+  { name:"Campus road", pts:[[19.13202,72.91885],[19.13199,72.91833],[19.13201,72.91801],[19.13305,72.91798]] },
+  { name:"Campus road", pts:[[19.12862,72.91910],[19.12888,72.91908]] },
+  { name:"Campus road", pts:[[19.12841,72.91900],[19.12862,72.91910]] },
+  { name:"Campus road", pts:[[19.12840,72.91861],[19.12835,72.91882]] },
+  { name:"Campus road", pts:[[19.12835,72.91882],[19.12841,72.91900]] },
+  { name:"Campus road", pts:[[19.12924,72.91634],[19.12925,72.91656]] },
+  { name:"Campus road", pts:[[19.12906,72.91656],[19.12906,72.91636]] },
+  { name:"Campus road", pts:[[19.12961,72.91728],[19.12967,72.91796],[19.12974,72.91860],[19.12977,72.91902]] },
+  { name:"Campus road", pts:[[19.12798,72.91683],[19.12830,72.91688],[19.12836,72.91705],[19.12830,72.91717],[19.12801,72.91714],[19.12791,72.91699],[19.12798,72.91683]] },
+  { name:"Campus road", pts:[[19.12798,72.91683],[19.12774,72.91662]] },
+  { name:"Campus road", pts:[[19.13305,72.91798],[19.13302,72.91749],[19.13301,72.91718],[19.13301,72.91715],[19.13300,72.91708]] },
+  { name:"Campus road", pts:[[19.13893,72.91420],[19.13872,72.91441],[19.13859,72.91470]] },
+  { name:"Campus road", pts:[[19.13776,72.91496],[19.13778,72.91460]] },
+  { name:"Campus road", pts:[[19.13775,72.91498],[19.13724,72.91503]] },
+  { name:"Campus road", pts:[[19.13785,72.90536],[19.13737,72.90424]] },
+  { name:"Campus road", pts:[[19.13733,72.90414],[19.13695,72.90324]] },
+  { name:"Campus road", pts:[[19.13737,72.90424],[19.13733,72.90414]] },
+  { name:"Campus road", pts:[[19.13695,72.90324],[19.13636,72.90334],[19.13612,72.90272]] },
+  { name:"Campus road", pts:[[19.13608,72.91570],[19.13590,72.91571],[19.13553,72.91572],[19.13553,72.91552],[19.13583,72.91552],[19.13589,72.91556],[19.13590,72.91571]] },
+  { name:"Campus road", pts:[[19.13840,72.91365],[19.13855,72.91382],[19.13872,72.91441]] },
+  { name:"Campus road", pts:[[19.12410,72.91137],[19.12410,72.91107],[19.12402,72.91094],[19.12405,72.91066],[19.12415,72.90940]] },
+  { name:"Campus road", pts:[[19.12471,72.91083],[19.12431,72.91083],[19.12425,72.91066],[19.12405,72.91066]] },
+  { name:"Campus road", pts:[[19.13573,72.91058],[19.13578,72.91027],[19.13583,72.90993]] },
+  { name:"Campus road", pts:[[19.13578,72.91027],[19.13561,72.91025]] },
+  { name:"Campus road", pts:[[19.13766,72.91359],[19.13750,72.91361],[19.13737,72.91379]] },
+  { name:"Campus road", pts:[[19.12351,72.91674],[19.12345,72.91673]] },
+  { name:"Campus road", pts:[[19.12344,72.91680],[19.12345,72.91673],[19.12344,72.91658],[19.12307,72.91652]] },
+  { name:"H19 Road", pts:[[19.13512,72.90758],[19.13634,72.90810]] },
+  { name:"Campus road", pts:[[19.12399,72.91313],[19.12389,72.91315],[19.12265,72.91344],[19.12253,72.91334],[19.12251,72.91320]] }
+];
+/* Rough outline of the academic area, used only for shading. */
+const ACADEMIC_ZONE = [
+  [19.13480,72.91455],[19.13450,72.91700],[19.13100,72.91820],
+  [19.12980,72.91700],[19.13000,72.91520],[19.13150,72.91380],[19.13380,72.91400]
+];
+
+
+/* Speeds used for ETA maths (km/h). */
+const SPEED = { walk:5.0, auto:18.0, buggy:12.0 };
+/* Mean observed wait before an auto is found, from the campus survey. */
+const TYPICAL_WAIT_MIN = 7.3;
+
+/* ---------------------------------------------------------------------------
+   2. GEOMETRY HELPERS
+--------------------------------------------------------------------------- */
+const R_EARTH = 6371000;
+const rad = d => d * Math.PI / 180;
+
+/** Great-circle distance in metres. */
+function haversine(a, b){
+  const dLat = rad(b[0]-a[0]), dLng = rad(b[1]-a[1]);
+  const s = Math.sin(dLat/2)**2 +
+            Math.cos(rad(a[0]))*Math.cos(rad(b[0]))*Math.sin(dLng/2)**2;
+  return 2 * R_EARTH * Math.asin(Math.min(1, Math.sqrt(s)));
+}
+/** Total length of a polyline, metres. */
+const pathLength = pts => pts.reduce((m,p,i) => i ? m + haversine(pts[i-1],p) : 0, 0);
+/** Linear interpolation between two coordinates. */
+const lerp = (a,b,t) => [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t];
+/** Compass bearing a -> b, degrees. */
+function bearing(a,b){
+  const y = Math.sin(rad(b[1]-a[1]))*Math.cos(rad(b[0]));
+  const x = Math.cos(rad(a[0]))*Math.sin(rad(b[0])) -
+            Math.sin(rad(a[0]))*Math.cos(rad(b[0]))*Math.cos(rad(b[1]-a[1]));
+  return (Math.atan2(y,x)*180/Math.PI + 360) % 360;
+}
+const fmtKm  = m => m < 950 ? Math.round(m) + " m" : (m/1000).toFixed(2) + " km";
+const fmtMin = m => m < 1 ? "<1 min" : Math.round(m) + " min";
+/** Travel time in minutes for a distance in metres at a km/h speed. */
+const minutesFor = (metres, kmh) => (metres/1000) / kmh * 60;
+
+/* ---------------------------------------------------------------------------
+   3. ROAD GRAPH + DIJKSTRA
+   Nodes are de-duplicated by rounded coordinate, so roads that share a
+   landmark automatically connect there.
+--------------------------------------------------------------------------- */
+const key = p => p[0].toFixed(5) + "," + p[1].toFixed(5);
+const GRAPH = new Map();   // key -> { pt, edges: Map(key -> metres) }
+
+function node(p){
+  const k = key(p);
+  if (!GRAPH.has(k)) GRAPH.set(k, { pt:[+p[0], +p[1]], edges:new Map() });
+  return k;
+}
+function link(a, b){
+  const ka = node(a), kb = node(b);
+  if (ka === kb) return;
+  const w = haversine(GRAPH.get(ka).pt, GRAPH.get(kb).pt);
+  GRAPH.get(ka).edges.set(kb, w);
+  GRAPH.get(kb).edges.set(ka, w);
+}
+ROADS.forEach(r => { for (let i = 1; i < r.pts.length; i++) link(r.pts[i-1], r.pts[i]); });
+
+/** Graph node closest to an arbitrary coordinate. */
+function nearestNode(pt){
+  let best = null, bd = Infinity;
+  for (const [k, n] of GRAPH){
+    const d = haversine(pt, n.pt);
+    if (d < bd){ bd = d; best = k; }
+  }
+  return best;
+}
+
+/**
+ * Dijkstra over the road graph.
+ * @param {string} src node key
+ * @param {string} dst node key
+ * @param {Set<string>} [penalise] undirected edge ids ("a|b" sorted) to weight up
+ * @returns {{keys:string[], pts:number[][], dist:number}|null}
+ */
+function shortestPath(src, dst, penalise){
+  const PENALTY = 3.2;
+  const dist = new Map(), prev = new Map(), seen = new Set();
+  for (const k of GRAPH.keys()) dist.set(k, Infinity);
+  dist.set(src, 0);
+
+  while (true){
+    let u = null, ud = Infinity;
+    for (const [k, d] of dist) if (!seen.has(k) && d < ud){ ud = d; u = k; }
+    if (u === null || u === dst) break;
+    seen.add(u);
+    for (const [v, w] of GRAPH.get(u).edges){
+      if (seen.has(v)) continue;
+      const eid = u < v ? u + "|" + v : v + "|" + u;
+      const cost = ud + w * (penalise && penalise.has(eid) ? PENALTY : 1);
+      if (cost < dist.get(v)){ dist.set(v, cost); prev.set(v, u); }
+    }
+  }
+  if (!isFinite(dist.get(dst))) return null;
+
+  const keys = [];
+  for (let k = dst; k !== undefined; k = prev.get(k)){
+    keys.unshift(k);
+    if (k === src) break;
+  }
+  if (keys[0] !== src) return null;
+  const pts = keys.map(k => GRAPH.get(k).pt);
+  return { keys, pts, dist: pathLength(pts) };
+}
+
+/** Undirected edge ids along a node path. */
+function edgeIds(keys){
+  const s = new Set();
+  for (let i = 1; i < keys.length; i++){
+    const a = keys[i-1], b = keys[i];
+    s.add(a < b ? a + "|" + b : b + "|" + a);
+  }
+  return s;
+}
+
+/** Route through an ordered list of landmark ids (used for patrol loops). */
+function routeThrough(ids){
+  let pts = [];
+  for (let i = 1; i < ids.length; i++){
+    const r = shortestPath(nearestNode(P(ids[i-1])), nearestNode(P(ids[i])));
+    if (!r) continue;
+    pts = pts.length ? pts.concat(r.pts.slice(1)) : r.pts.slice();
+  }
+  return pts;
+}
+
+/* ---------------------------------------------------------------------------
+   4. MAP SETUP
+--------------------------------------------------------------------------- */
+const map = L.map('map', { zoomControl:false, attributionControl:true })
+             .setView(CAMPUS_CENTER, CAMPUS_ZOOM);
+L.control.zoom({ position:'bottomright' }).addTo(map);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom:19,
+  /* tiles, roads and landmark positions all come from OSM, ODbL licensed */
+  attribution:'&copy; OpenStreetMap contributors'
+}).addTo(map);
+
+const layers = {
+  academic : L.layerGroup().addTo(map),
+  hostels  : L.layerGroup().addTo(map),
+  gates    : L.layerGroup().addTo(map),
+  autos    : L.layerGroup().addTo(map),
+  buggies  : L.layerGroup().addTo(map),
+  roads    : L.layerGroup(),
+  routes   : L.layerGroup().addTo(map),
+  markers  : L.layerGroup().addTo(map)
+};
+
+/* academic zone shading */
+L.polygon(ACADEMIC_ZONE, {
+  color:'#1f6feb', weight:1.5, opacity:.5, fillColor:'#1f6feb', fillOpacity:.07
+}).addTo(layers.academic);
+
+/* road network (hidden by default) */
+ROADS.forEach(r => {
+  L.polyline(r.pts, { color:'#8b94a3', weight:3, opacity:.75, dashArray:'1 6',
+                      lineCap:'round' })
+   .bindTooltip(r.name, { sticky:true }).addTo(layers.roads);
+});
+
+/* landmark pins */
+const initials = l => {
+  if (l.cat === 'hostel') return l.name.replace('Hostel ', 'H');
+  const words = l.name.replace(/\(.*\)/, '').trim().split(/\s+/);
+  return (words.length > 1 ? words[0][0] + words[1][0] : words[0].slice(0,2)).toUpperCase();
+};
+LANDMARKS.forEach(l => {
+  const cls = 'pin ' + l.cat + (l.star ? ' star' : '');
+  const m = L.marker([l.lat, l.lng], {
+    icon: L.divIcon({ className:'', html:`<div class="${cls}">${initials(l)}</div>`,
+                      iconSize:[l.star?30:26, l.star?30:26],
+                      iconAnchor:[l.star?15:13, l.star?15:13] }),
+    title: l.name
+  });
+  m.bindPopup(`<div class="pop-h"><b>${l.name}</b></div>
+    <div class="pop-row"><span>Category</span><span>${l.cat}</span></div>
+    <div class="pop-row"><span>Coordinates</span><span>${l.lat.toFixed(4)}, ${l.lng.toFixed(4)}</span></div>
+    ${l.star ? '<div class="pop-row"><span>Note</span><span>Highlighted</span></div>' : ''}`);
+  const target = l.cat === 'hostel' ? layers.hostels
+               : l.cat === 'gate'   ? layers.gates
+               : layers.academic;
+  m.addTo(target);
+});
+
+/* ---------------------------------------------------------------------------
+   5. VEHICLE FLEET SIMULATION
+--------------------------------------------------------------------------- */
+const PATROLS = {
+  /* Autos work the paying corridors: the gates and the academic area. Buggies
+     run the hostel feeders. Each list is a sequence of landmarks; the router
+     fills in the roads between them. */
+  auto: [
+    ['main-gate','h10','kresit','lhc','main-bldg','library'],
+    ['main-gate','main-bldg','convo','sac','gymkhana','h11'],
+    ['y-point','lhc','kresit','main-bldg','library','sac'],
+    ['h16','h15','h1','h2','library','main-bldg','convo'],
+    ['h12','h13','h14','h9','h5','h4','h3'],
+    ['lakeside','main-gate','h10','kresit','lhc'],
+    ['h7','h8','h11','gymkhana','main-bldg','main-gate']
+  ],
+  buggy: [
+    ['h16','h15','h1','gymkhana','library','main-bldg','lhc'],
+    ['h12','h14','h9','h5','h4','h3','h2','h1'],
+    ['main-gate','h10','kresit','lhc','main-bldg','convo'],
+    ['h17','h18','h6','h9','h5','h11','gymkhana','sac']
+  ]
+};
+
+const STATUSES = ['Available','En Route','Full'];
+const rnd  = (a,b) => a + Math.random()*(b-a);
+const pick = arr => arr[Math.floor(Math.random()*arr.length)];
+
+const fleet = [];
+
+function makeVehicle(type, n){
+  const loops = PATROLS[type];
+  const pts = routeThrough(loops[n % loops.length]);
+  if (pts.length < 2) return null;
+
+  const cap = type === 'buggy' ? 6 : 3;
+  const v = {
+    id: type === 'auto' ? `IITB Auto #${String(n+1).padStart(2,'0')}`
+                        : `Campus Buggy #${String(n+1).padStart(2,'0')}`,
+    type, path: pts,
+    seg: Math.floor(Math.random()*(pts.length-1)),
+    t: Math.random(),
+    dir: Math.random() < 0.5 ? 1 : -1,
+    speed: type === 'auto' ? rnd(16,26) : rnd(10,16),
+    status: pick(STATUSES),
+    charge: type === 'buggy' ? rnd(35,100) : rnd(20,95),
+    cap, seats: 0,
+    marker: null
+  };
+  v.seats = v.status === 'Full' ? cap
+          : v.status === 'En Route' ? Math.max(1, Math.round(rnd(1, cap-1)))
+          : Math.round(rnd(0, Math.max(0, cap-2)));
+
+  const pos = lerp(v.path[v.seg], v.path[v.seg+1], v.t);
+  v.marker = L.marker(pos, { icon: vehicleIcon(v, 0), zIndexOffset:500, title:v.id });
+  v.marker.bindPopup(popupHTML(v), { closeButton:true });
+  v.marker.on('popupopen', () => { v.marker.setPopupContent(popupHTML(v)); });
+  v.marker.addTo(type === 'auto' ? layers.autos : layers.buggies);
+  return v;
+}
+
+const GLYPH = {
+  auto:`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <path d="M5 16V11a5 5 0 0 1 5-5h3l4 5v5" stroke="#fff" stroke-width="2"
+      stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="8" cy="17.5" r="2.2" stroke="#fff" stroke-width="1.8"/>
+    <circle cx="16.5" cy="17.5" r="2.2" stroke="#fff" stroke-width="1.8"/></svg>`,
+  buggy:`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <path d="M4 7h11v8H4z" stroke="#fff" stroke-width="1.9" stroke-linejoin="round"/>
+    <path d="M15 10h3l2 3v2h-5" stroke="#fff" stroke-width="1.9" stroke-linejoin="round"/>
+    <circle cx="7.5" cy="17.2" r="1.9" stroke="#fff" stroke-width="1.7"/>
+    <circle cx="16.5" cy="17.2" r="1.9" stroke="#fff" stroke-width="1.7"/></svg>`
+};
+
+function vehicleIcon(v, hdg, selected){
+  return L.divIcon({
+    className:'',
+    html:`<div class="veh ${v.type}${selected ? ' sel':''}">
+            <i class="heading" style="transform:rotate(${hdg}deg)"></i>
+            <div class="body">${GLYPH[v.type]}</div>
+          </div>`,
+    iconSize:[34,34], iconAnchor:[17,17], popupAnchor:[0,-16]
+  });
+}
+
+function popupHTML(v){
+  const cls = v.status.toLowerCase().replace(' ','');
+  const col = v.type === 'auto' ? 'var(--auto)' : 'var(--buggy)';
+  const lvlLabel = v.type === 'buggy' ? 'Battery' : 'Fuel';
+  const lvlCol = v.charge > 50 ? 'var(--ok)' : v.charge > 20 ? 'var(--warn)' : 'var(--bad)';
+  return `
+    <div class="pop-h"><span class="swatch" style="background:${col}"></span>
+      <div><b>${v.id}</b>
+        <span class="pop-type">${v.type === 'auto' ? 'Auto-rickshaw · point to point'
+                                                   : 'Electric buggy · shared shuttle'}</span></div></div>
+    <div class="pop-row"><span>Status</span><span class="badge ${cls}">${v.status}</span></div>
+    <div class="pop-row"><span>Speed</span><span>${v.speed.toFixed(0)} km/h</span></div>
+    <div class="pop-row"><span>Occupancy</span><span>${v.seats}/${v.cap} seats</span></div>
+    <div class="pop-row"><span>${lvlLabel}</span><span>${Math.round(v.charge)}%</span></div>
+    <div class="bar"><i style="width:${Math.max(3,v.charge)}%;background:${lvlCol}"></i></div>`;
+}
+
+/** Move a vehicle `metres` along its path, bouncing at either end. */
+function advance(v, metres){
+  let left = metres;
+  let guard = 0;
+  while (left > 0 && guard++ < 500){
+    const a = v.path[v.seg], b = v.path[v.seg+1];
+    const segLen = Math.max(0.5, haversine(a,b));
+    const remain = v.dir > 0 ? (1 - v.t) * segLen : v.t * segLen;
+    if (left < remain){
+      v.t += v.dir * (left / segLen);
+      left = 0;
+    } else {
+      left -= remain;
+      if (v.dir > 0){
+        v.seg++;
+        v.t = 0;
+        if (v.seg >= v.path.length - 1){ v.seg = v.path.length - 2; v.t = 1; v.dir = -1; }
+      } else {
+        v.seg--;
+        v.t = 1;
+        if (v.seg < 0){ v.seg = 0; v.t = 0; v.dir = 1; }
+      }
+    }
+  }
+  v.t = Math.min(1, Math.max(0, v.t));
+  return lerp(v.path[v.seg], v.path[v.seg+1], v.t);
+}
+
+let selectedId = null;
+let lastFrame = performance.now();
+
+function animate(now){
+  const dt = Math.min(0.25, (now - lastFrame)/1000);
+  lastFrame = now;
+  fleet.forEach(v => {
+    const factor = v.status === 'Full' ? 0.85 : 1;
+    const pos = advance(v, (v.speed*1000/3600) * dt * factor);
+    v.marker.setLatLng(pos);
+    const a = v.path[v.seg], b = v.path[v.seg+1];
+    const hdg = v.dir > 0 ? bearing(a,b) : bearing(b,a);
+    if (Math.abs((v._hdg ?? -999) - hdg) > 4 || v._sel !== (v.id === selectedId)){
+      v._hdg = hdg; v._sel = (v.id === selectedId);
+      v.marker.setIcon(vehicleIcon(v, hdg, v._sel));
+    }
+  });
+  requestAnimationFrame(animate);
+}
+
+/* telemetry refresh — status, charge and speed drift every 2.5 s */
+function telemetryTick(){
+  fleet.forEach(v => {
+    if (Math.random() < 0.22){
+      v.status = pick(STATUSES);
+      v.seats = v.status === 'Full' ? v.cap
+              : v.status === 'En Route' ? Math.max(1, Math.round(rnd(1, v.cap-1)))
+              : Math.round(rnd(0, Math.max(0, v.cap-2)));
+    }
+    v.charge = Math.max(6, v.charge - rnd(0, 0.35));
+    /* campus speed limit is 25 km/h, so autos drift inside 10-24 and buggies,
+       which are slower by design, inside 6-16 */
+    v.speed  = Math.min(v.type==='auto'?24:16,
+               Math.max(v.type==='auto'?10:6, v.speed + rnd(-2.5, 2.5)));
+    if (v.marker.isPopupOpen()) v.marker.setPopupContent(popupHTML(v));
+  });
+  updateCounts();
+}
+
+function updateCounts(){
+  const a = fleet.filter(v => v.type === 'auto');
+  const b = fleet.filter(v => v.type === 'buggy');
+  const free = arr => arr.filter(v => v.status === 'Available').length;
+  document.getElementById('cAuto').textContent      = a.length;
+  document.getElementById('cAutoFree').textContent  = free(a);
+  document.getElementById('cBuggy').textContent     = b.length;
+  document.getElementById('cBuggyFree').textContent = free(b);
+  document.getElementById('nAutos').textContent     = a.length;
+  document.getElementById('nBuggies').textContent   = b.length;
+}
+
+/* ---------------------------------------------------------------------------
+   6. ROUTE PLANNING UI
+--------------------------------------------------------------------------- */
+const $ = id => document.getElementById(id);
+const els = {
+  origin:$('origin'), dest:$('dest'), summary:$('summary'),
+  sumDist:$('sumDist'), sumTag:$('sumTag'), tWalk:$('tWalk'), tAuto:$('tAuto'),
+  tBuggy:$('tBuggy'), tDoor:$('tDoor'), altNote:$('altNote'), altDist:$('altDist'),
+  hint:$('hint')
+};
+
+/* populate the two dropdowns, grouped by category */
+(function fillSelectors(){
+  const groups = [
+    ['Gates',     'gate'],
+    ['Academic',  'academic'],
+    ['Facilities','facility'],
+    ['Hostels',   'hostel']
+  ];
+  [els.origin, els.dest].forEach(sel => {
+    sel.innerHTML = '<option value="">Select a point…</option>';
+    groups.forEach(([label, cat]) => {
+      const g = document.createElement('optgroup');
+      g.label = label;
+      LANDMARKS.filter(l => l.cat === cat).forEach(l => {
+        const o = document.createElement('option');
+        o.value = l.id; o.textContent = l.name;
+        g.appendChild(o);
+      });
+      sel.appendChild(g);
+    });
+  });
+  els.origin.value = 'h16';
+  els.dest.value   = 'lhc';
+})();
+
+let mode = 'auto';
+let endpoints = { o:null, d:null };     // {pt, label}
+let endMarkers = { o:null, d:null };
+let pickMode = null;                    // 'o' | 'd' | null
+
+function setEndpoint(which, pt, label){
+  endpoints[which] = { pt, label };
+  if (endMarkers[which]) layers.markers.removeLayer(endMarkers[which]);
+  endMarkers[which] = L.marker(pt, {
+    icon: L.divIcon({ className:'',
+      html:`<div class="endpin ${which}"></div>`,
+      iconSize:[18,18], iconAnchor:[9,9] }),
+    title:(which === 'o' ? 'Pickup: ' : 'Drop: ') + label
+  }).addTo(layers.markers);
+}
+
+function currentEndpoints(){
+  const o = els.origin.value, d = els.dest.value;
+  if (o) setEndpoint('o', P(o), BY_ID[o].name);
+  if (d) setEndpoint('d', P(d), BY_ID[d].name);
+  return endpoints.o && endpoints.d ? endpoints : null;
+}
+
+function clearRoutes(){ layers.routes.clearLayers(); }
+
+function drawRoute(){
+  const ends = currentEndpoints();
+  if (!ends){ els.summary.hidden = true; return; }
+  clearRoutes();
+
+  const src = nearestNode(ends.o.pt), dst = nearestNode(ends.d.pt);
+  const primary = shortestPath(src, dst);
+  if (!primary){ els.summary.hidden = true; return; }
+
+  /* The two endpoints are rarely standing on the road itself, so the walk-in
+     legs are part of the trip and are counted in every distance below. When
+     both endpoints hang off the same road node the legs are the whole trip. */
+  const legs = haversine(ends.o.pt, primary.pts[0]) +
+               haversine(ends.d.pt, primary.pts.at(-1));
+  const primaryDist = primary.dist + legs;
+
+  /* alternative: penalise the primary edges and solve again */
+  const alt = shortestPath(src, dst, edgeIds(primary.keys));
+  const altDistTotal = alt ? alt.dist + legs : null;
+  const altIsDistinct = alt && alt.pts.length > 1 &&
+                        Math.abs(alt.dist - primary.dist) > 40;
+
+  if (altIsDistinct){
+    L.polyline(alt.pts, { color:'var(--route-alt)', weight:5, opacity:.65,
+                          lineCap:'round', lineJoin:'round' })
+     .bindTooltip('Alternative · ' + fmtKm(altDistTotal), { sticky:true })
+     .addTo(layers.routes);
+  }
+
+  /* casing + animated primary line */
+  if (primary.pts.length > 1){
+    L.polyline(primary.pts, { color:'#fff', weight:10, opacity:.9,
+                              lineCap:'round', lineJoin:'round' }).addTo(layers.routes);
+    L.polyline(primary.pts, { color:'var(--route)', weight:6, opacity:.95,
+                              lineCap:'round', lineJoin:'round',
+                              className:'route-anim' })
+     .bindTooltip('Optimised route · ' + fmtKm(primaryDist), { sticky:true })
+     .addTo(layers.routes);
+  }
+
+  /* short connectors from the actual endpoints to the road network */
+  [[ends.o.pt, primary.pts[0]], [ends.d.pt, primary.pts.at(-1)]].forEach(pair => {
+    if (haversine(pair[0], pair[1]) > 8)
+      L.polyline(pair, { color:'var(--route)', weight:3, opacity:.6, dashArray:'2 7' })
+       .addTo(layers.routes);
+  });
+
+  /* leave room for whichever edge the panel is docked to */
+  const narrow = window.innerWidth <= 760;
+  map.fitBounds(L.latLngBounds([ends.o.pt, ...primary.pts, ends.d.pt]).pad(0.35),
+                narrow ? { paddingTopLeft:[24, 70],
+                           paddingBottomRight:[24, Math.round(window.innerHeight*0.5)],
+                           maxZoom:17 }
+                       : { paddingTopLeft:[360, 40], maxZoom:17 });
+  showSummary(primaryDist, altIsDistinct ? altDistTotal : null);
+}
+
+function showSummary(dist, altDist){
+  const walk  = minutesFor(dist, SPEED.walk);
+  const auto  = minutesFor(dist, SPEED.auto);
+  const buggy = minutesFor(dist, SPEED.buggy);
+  const ride  = mode === 'auto' ? auto : buggy;
+
+  els.summary.hidden = false;
+  els.sumDist.textContent = fmtKm(dist);
+  els.sumTag.textContent  = mode === 'auto' ? 'Auto · optimised' : 'Buggy · fixed route';
+  els.tWalk.textContent   = fmtMin(walk);
+  els.tAuto.textContent   = fmtMin(auto);
+  els.tBuggy.textContent  = fmtMin(buggy);
+  els.tDoor.textContent   = fmtMin(ride + TYPICAL_WAIT_MIN);
+
+  els.altNote.hidden = altDist === null;
+  if (altDist !== null) els.altDist.textContent = fmtKm(altDist) + " · " + fmtMin(minutesFor(altDist, SPEED[mode]));
+
+  els.hint.textContent = walk <= ride + TYPICAL_WAIT_MIN
+    ? `Walking is faster door to door once the ${TYPICAL_WAIT_MIN} min typical wait is counted.`
+    : `Door to door includes the ${TYPICAL_WAIT_MIN} min average wait measured in the campus survey.`;
+}
+
+/* ---------------------------------------------------------------------------
+   7. NEAREST VEHICLE
+--------------------------------------------------------------------------- */
+function findNearest(){
+  const ends = currentEndpoints();
+  const from = ends ? ends.o.pt : CAMPUS_CENTER;
+  const pool = fleet.filter(v => v.type === mode && v.status === 'Available');
+  if (!pool.length){
+    els.summary.hidden = false;
+    els.hint.textContent = `No ${mode === 'auto' ? 'auto' : 'buggy'} is free right now. `
+                         + `Statuses refresh every few seconds — try again shortly.`;
+    return;
+  }
+  let best = null, bd = Infinity;
+  pool.forEach(v => {
+    const d = haversine(from, [v.marker.getLatLng().lat, v.marker.getLatLng().lng]);
+    if (d < bd){ bd = d; best = v; }
+  });
+  selectedId = best.id;
+  fleet.forEach(v => { v._sel = null; });     // force icon refresh next frame
+  map.panTo(best.marker.getLatLng(), { animate:true });
+  best.marker.openPopup();
+
+  els.summary.hidden = false;
+  els.hint.textContent = `${best.id} is ${fmtKm(bd)} away, about `
+    + `${fmtMin(minutesFor(bd, SPEED[mode]))} to reach you.`;
+}
+
+/* ---------------------------------------------------------------------------
+   8. EVENTS, LAYER TOGGLES, BOOT
+--------------------------------------------------------------------------- */
+els.origin.addEventListener('change', drawRoute);
+els.dest.addEventListener('change', drawRoute);
+
+function setMode(m){
+  mode = m;
+  $('modeAuto').setAttribute('aria-pressed', String(m === 'auto'));
+  $('modeBuggy').setAttribute('aria-pressed', String(m === 'buggy'));
+  if (!els.summary.hidden) drawRoute();
+}
+$('modeAuto').addEventListener('click',  () => setMode('auto'));
+$('modeBuggy').addEventListener('click', () => setMode('buggy'));
+$('findBtn').addEventListener('click', findNearest);
+$('clearBtn').addEventListener('click', () => {
+  clearRoutes(); layers.markers.clearLayers();
+  endpoints = { o:null, d:null }; endMarkers = { o:null, d:null };
+  els.origin.value = ''; els.dest.value = '';
+  els.summary.hidden = true; selectedId = null;
+  fleet.forEach(v => { v._sel = null; });
+});
+
+/* click-to-pick on the map */
+function armPick(which, btn){
+  pickMode = pickMode === which ? null : which;
+  $('pickO').setAttribute('aria-pressed', String(pickMode === 'o'));
+  $('pickD').setAttribute('aria-pressed', String(pickMode === 'd'));
+  map.getContainer().style.cursor = pickMode ? 'crosshair' : '';
+}
+$('pickO').addEventListener('click', () => armPick('o'));
+$('pickD').addEventListener('click', () => armPick('d'));
+
+map.on('click', e => {
+  if (!pickMode) return;
+  const pt = [e.latlng.lat, e.latlng.lng];
+  const snapped = GRAPH.get(nearestNode(pt)).pt;
+  setEndpoint(pickMode, snapped, `Custom point (${snapped[0].toFixed(4)}, ${snapped[1].toFixed(4)})`);
+  (pickMode === 'o' ? els.origin : els.dest).value = '';
+  armPick(null);
+  if (endpoints.o && endpoints.d){
+    /* drawRoute() re-reads the selects, so route directly from stored endpoints */
+    const primary = shortestPath(nearestNode(endpoints.o.pt), nearestNode(endpoints.d.pt));
+    if (primary){
+      clearRoutes();
+      const alt = shortestPath(nearestNode(endpoints.o.pt), nearestNode(endpoints.d.pt),
+                               edgeIds(primary.keys));
+      const distinct = alt && Math.abs(alt.dist - primary.dist) > 40;
+      if (distinct) L.polyline(alt.pts, { color:'var(--route-alt)', weight:5, opacity:.65 })
+                     .addTo(layers.routes);
+      L.polyline(primary.pts, { color:'#fff', weight:10, opacity:.9 }).addTo(layers.routes);
+      L.polyline(primary.pts, { color:'var(--route)', weight:6, className:'route-anim' })
+       .addTo(layers.routes);
+      showSummary(primary.dist, distinct ? alt.dist : null);
+    }
+  }
+});
+
+/* layer checkboxes */
+const toggle = (box, layer) => {
+  box.addEventListener('change', () => {
+    if (box.checked) map.addLayer(layer); else map.removeLayer(layer);
+  });
+};
+toggle($('lAutos'),    layers.autos);
+toggle($('lBuggies'),  layers.buggies);
+toggle($('lHostels'),  layers.hostels);
+toggle($('lAcademic'), layers.academic);
+toggle($('lRoads'),    layers.roads);
+
+/* build the fleet: 7 autos + 4 buggies = 11 active vehicles */
+for (let i = 0; i < 7; i++){ const v = makeVehicle('auto', i);  if (v) fleet.push(v); }
+for (let i = 0; i < 4; i++){ const v = makeVehicle('buggy', i); if (v) fleet.push(v); }
+
+$('nHostels').textContent  = LANDMARKS.filter(l => l.cat === 'hostel').length;
+$('nAcademic').textContent = LANDMARKS.filter(l => l.cat === 'academic').length;
+updateCounts();
+setInterval(telemetryTick, 2500);
+requestAnimationFrame(animate);
+drawRoute();
+
+console.log(`IITB Transit ready — ${GRAPH.size} road nodes, ${fleet.length} vehicles.`);
+</script>
+</body>
+</html>

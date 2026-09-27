@@ -1,0 +1,181 @@
+/* IITB Transit - all page styling. Colours live in :root at the top. */
+/* ============================================================
+   IITB Transit — prototype styles
+   ============================================================ */
+:root{
+  --auto:#f0871f;          /* auto-rickshaw brand colour */
+  --buggy:#12a150;         /* electric buggy brand colour */
+  --route:#1f6feb;         /* primary route */
+  --route-alt:#8b94a3;     /* alternative route */
+  --ink:#0d1117;
+  --ink-2:#424a55;
+  --ink-3:#737c89;
+  --line:#dfe3ea;
+  --glass:rgba(255,255,255,.78);
+  --glass-edge:rgba(255,255,255,.55);
+  --shadow:0 2px 6px rgba(13,17,23,.08), 0 18px 44px -18px rgba(13,17,23,.38);
+  --ok:#12a150; --warn:#d98b00; --bad:#d13b3b;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; font-family:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  font-size:14px; color:var(--ink); background:#e8eaed; overflow:hidden;
+}
+#map{position:absolute; inset:0; z-index:1}
+
+/* ---------- floating panel ---------- */
+.panel{
+  position:absolute; z-index:1000; top:16px; left:16px; width:340px;
+  max-height:calc(100% - 32px); display:flex; flex-direction:column;
+  background:var(--glass); backdrop-filter:blur(16px) saturate(165%);
+  -webkit-backdrop-filter:blur(16px) saturate(165%);
+  border:1px solid var(--glass-edge); border-radius:16px; box-shadow:var(--shadow);
+  overflow:hidden;
+}
+.panel-head{padding:16px 18px 13px; border-bottom:1px solid rgba(13,17,23,.07)}
+.brand{display:flex; align-items:center; gap:9px}
+.brand-dot{width:9px; height:9px; border-radius:50%; background:var(--ok);
+  box-shadow:0 0 0 4px rgba(18,161,80,.18); animation:blip 2.4s ease-in-out infinite}
+@keyframes blip{0%,100%{opacity:1}50%{opacity:.45}}
+.brand h1{margin:0; font-size:15.5px; font-weight:650; letter-spacing:-.01em}
+.brand small{display:block; font-size:11.5px; color:var(--ink-3); font-weight:450; margin-top:1px}
+.panel-body{padding:14px 18px 18px; overflow-y:auto; overscroll-behavior:contain}
+
+.lbl{display:block; font-size:11px; font-weight:600; letter-spacing:.045em;
+  text-transform:uppercase; color:var(--ink-3); margin:0 0 5px}
+.field{display:flex; gap:6px; margin-bottom:11px}
+select{
+  flex:1; min-width:0; padding:9px 10px; font:inherit; font-size:13.5px; color:var(--ink);
+  background:rgba(255,255,255,.92); border:1px solid var(--line); border-radius:9px;
+  appearance:none; cursor:pointer;
+}
+select:focus-visible, button:focus-visible, input:focus-visible{
+  outline:2px solid var(--route); outline-offset:2px}
+.pick{
+  flex:none; width:36px; border:1px solid var(--line); border-radius:9px; cursor:pointer;
+  background:rgba(255,255,255,.92); color:var(--ink-2); font-size:15px; line-height:1;
+}
+.pick[aria-pressed="true"]{background:var(--route); border-color:var(--route); color:#fff}
+
+/* segmented control */
+.seg{display:flex; background:rgba(13,17,23,.06); border-radius:10px; padding:3px; gap:3px; margin-bottom:12px}
+.seg button{
+  flex:1; padding:8px 6px; font:inherit; font-size:13px; font-weight:560; cursor:pointer;
+  background:transparent; border:0; border-radius:8px; color:var(--ink-2);
+  display:flex; align-items:center; justify-content:center; gap:6px;
+}
+.seg button[aria-pressed="true"]{background:#fff; color:var(--ink); box-shadow:0 1px 3px rgba(13,17,23,.14)}
+.seg .swatch{width:8px; height:8px; border-radius:50%}
+
+.btn{
+  width:100%; padding:11px; font:inherit; font-size:13.5px; font-weight:600; cursor:pointer;
+  border-radius:10px; border:1px solid transparent; margin-bottom:8px;
+}
+.btn-primary{background:var(--route); color:#fff}
+.btn-primary:hover{background:#1a5fd0}
+.btn-ghost{background:rgba(255,255,255,.92); border-color:var(--line); color:var(--ink)}
+.btn-ghost:hover{background:#fff}
+
+/* route summary */
+.summary{
+  margin-top:13px; padding:13px; border-radius:12px;
+  background:rgba(255,255,255,.92); border:1px solid var(--line);
+}
+.summary[hidden]{display:none}
+.sum-top{display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:10px}
+.sum-dist{font-size:22px; font-weight:670; letter-spacing:-.02em; font-variant-numeric:tabular-nums}
+.sum-tag{font-size:11px; font-weight:650; padding:3px 8px; border-radius:20px;
+  background:rgba(31,111,235,.12); color:var(--route)}
+.rows{display:grid; gap:7px}
+.row{display:flex; justify-content:space-between; align-items:center; font-size:13px}
+.row .k{color:var(--ink-2); display:flex; align-items:center; gap:7px}
+.row .v{font-weight:620; font-variant-numeric:tabular-nums}
+.row .dot{width:8px; height:8px; border-radius:50%; flex:none}
+.hint{margin:10px 0 0; font-size:11.5px; line-height:1.5; color:var(--ink-3)}
+.alt-note{margin-top:9px; padding-top:9px; border-top:1px dashed var(--line);
+  font-size:12px; color:var(--ink-2); display:flex; justify-content:space-between}
+
+/* layers */
+.layers{margin-top:14px; padding-top:13px; border-top:1px solid rgba(13,17,23,.08)}
+.chk{display:flex; align-items:center; gap:9px; padding:5px 0; font-size:13px; cursor:pointer}
+.chk input{width:15px; height:15px; accent-color:var(--route); cursor:pointer}
+.chk .tally{margin-left:auto; font-size:11.5px; color:var(--ink-3); font-variant-numeric:tabular-nums}
+
+/* fleet strip */
+.fleet{position:absolute; z-index:1000; left:16px; bottom:16px; display:flex; gap:8px; flex-wrap:wrap}
+.chip{
+  display:flex; align-items:center; gap:8px; padding:8px 13px; border-radius:11px;
+  background:var(--glass); backdrop-filter:blur(14px) saturate(160%);
+  -webkit-backdrop-filter:blur(14px) saturate(160%);
+  border:1px solid var(--glass-edge); box-shadow:var(--shadow); font-size:12.5px;
+}
+.chip b{font-variant-numeric:tabular-nums; font-weight:670}
+.chip .swatch{width:9px; height:9px; border-radius:50%}
+
+/* ---------- map markers ---------- */
+.veh{position:relative; width:34px; height:34px}
+.veh .body{
+  position:absolute; inset:0; border-radius:50%; display:grid; place-items:center;
+  border:2.5px solid #fff; box-shadow:0 2px 7px rgba(13,17,23,.35);
+  transition:transform .18s ease;
+}
+.veh.auto .body{background:var(--auto)}
+.veh.buggy .body{background:var(--buggy)}
+.veh .heading{
+  position:absolute; left:50%; top:50%; width:0; height:0; margin:-25px 0 0 -5px;
+  border-left:5px solid transparent; border-right:5px solid transparent;
+  border-bottom:8px solid rgba(13,17,23,.55); transform-origin:5px 25px;
+}
+.veh.sel .body{transform:scale(1.18)}
+.veh.sel::after{
+  content:""; position:absolute; left:50%; top:50%; width:34px; height:34px;
+  margin:-17px 0 0 -17px; border-radius:50%; border:2px solid var(--route);
+  animation:pulse 1.5s ease-out infinite;
+}
+@keyframes pulse{0%{transform:scale(1);opacity:.9}100%{transform:scale(2.6);opacity:0}}
+
+.pin{width:26px; height:26px; border-radius:50%; display:grid; place-items:center;
+  font-size:10px; font-weight:700; color:#fff; border:2px solid #fff;
+  box-shadow:0 1px 5px rgba(13,17,23,.3)}
+.pin.gate{background:#6f42c1}
+.pin.academic{background:#1f6feb}
+.pin.hostel{background:#5a6472}
+.pin.facility{background:#0f8b8d}
+.pin.star{background:#d13b3b; width:30px; height:30px; font-size:11px;
+  box-shadow:0 0 0 4px rgba(209,59,59,.22), 0 1px 5px rgba(13,17,23,.3)}
+.endpin{width:18px; height:18px; border-radius:50%; border:3px solid #fff;
+  box-shadow:0 1px 5px rgba(13,17,23,.4)}
+.endpin.o{background:var(--ok)} .endpin.d{background:var(--bad)}
+
+/* animated route dash */
+.route-anim{stroke-dasharray:14 9; animation:flow 1.1s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-23}}
+
+.leaflet-popup-content{margin:12px 14px; font-family:inherit; min-width:190px}
+.leaflet-popup-content-wrapper{border-radius:12px}
+.pop-h{display:flex; align-items:center; gap:8px; margin-bottom:9px}
+.pop-h .swatch{width:10px; height:10px; border-radius:50%; flex:none}
+.pop-h b{font-size:14px}
+.pop-type{font-size:11px; color:var(--ink-3); display:block; margin-top:1px}
+.pop-row{display:flex; justify-content:space-between; font-size:12.5px; padding:3px 0}
+.pop-row span:first-child{color:var(--ink-2)}
+.pop-row span:last-child{font-weight:620; font-variant-numeric:tabular-nums}
+.badge{display:inline-block; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:650}
+.badge.available{background:rgba(18,161,80,.14); color:var(--ok)}
+.badge.enroute{background:rgba(217,139,0,.16); color:var(--warn)}
+.badge.full{background:rgba(209,59,59,.13); color:var(--bad)}
+.bar{height:5px; border-radius:3px; background:rgba(13,17,23,.1); overflow:hidden; margin-top:4px}
+.bar i{display:block; height:100%; border-radius:3px}
+
+/* On a phone the panel becomes a bottom sheet: the map keeps the top half of
+   the screen, and the controls sit under the thumb. */
+@media (max-width:760px){
+  .panel{left:8px; right:8px; width:auto; top:auto; bottom:8px; max-height:52%;
+         border-radius:18px}
+  .panel-head{padding:12px 16px 10px}
+  .panel-body{padding:12px 16px 14px}
+  .fleet{left:8px; right:8px; top:8px; bottom:auto; gap:6px}
+  .chip{padding:6px 10px; font-size:11.5px}
+  .leaflet-bottom.leaflet-right{bottom:calc(52% + 2px)}
+}
