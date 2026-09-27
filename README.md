@@ -2,8 +2,7 @@
 
 A live map of shared autos and electric buggies on the IIT Bombay campus, with route planning and ETAs. It runs entirely in the browser. No build step, no server, no API keys.
 
-**Live demo:** [https://USERNAME.github.io/iitb-campus-transit/](https://USERNAME.github.io/iitb-campus-transit/)
-
+**Live demo:** https://bhashkarcodes.github.io/iitb-campus-transit/
 ![Screenshot of the prototype showing a planned route from Hostel 16 to the Lecture Hall Complex]()
 
 ---
